@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONBP Desktop – Click to continue vs Auto + morph</title>
+<style>
+  :root{
+    color-scheme: light;
+    --blue:#1B2BD6; --blue-d:#1220A8; --ink:#1F2230; --muted:#5B6072; --line:#D7DDF2;
+    --bg:#EFF3FE; --green:#11A05C;
+    --slide-ms:280ms; --ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:#fff;overflow:hidden}
+  button{font:inherit;cursor:pointer;border:0;background:none}
+  a{color:var(--blue);text-decoration:none;cursor:pointer}
+  .hidden{display:none!important}
+
+  /* ---------- Prototype control bar ---------- */
+  .ctrl{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100;display:flex;align-items:center;gap:10px;
+    background:#151827;color:#fff;padding:8px 10px 8px 16px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:13px}
+  .ctrl,.ctrl *,.mkt nav *{white-space:nowrap}
+  .ctrl .lbl{opacity:.7}
+  .seg{display:flex;background:#2A2E44;border-radius:999px;padding:3px}
+  .seg button{color:#C9CDE0;padding:6px 12px;border-radius:999px;font-size:13px}
+  .seg button.on{background:#fff;color:#151827;font-weight:600}
+  .ctrl .restart{color:#fff;padding:6px 12px;border-radius:999px;background:#2A2E44}
+  .ctrl .restart:hover{background:#3A3F5C}
+  .ctrl .dot{width:8px;height:8px;border-radius:50%;background:#7C8BFF}
+
+  .log{position:fixed;right:18px;bottom:76px;z-index:100;display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:none}
+  .log div{background:#151827;color:#fff;font-size:12px;padding:7px 11px;border-radius:8px;opacity:0;transform:translateY(6px);transition:.25s}
+  .log div.show{opacity:.92;transform:none}
+  .log div.warn{background:#B42318}
+
+  /* ---------- Pages (full page loads: landing → app) ---------- */
+  .page{position:absolute;inset:0;display:none}
+  .page.active{display:block}
+
+  /* Marketing landing */
+  .mkt{background:#fff;height:100%;overflow:auto}
+  .mkt nav{display:flex;align-items:center;gap:40px;padding:22px 9vw}
+  .logo{font-weight:800;font-size:34px;letter-spacing:-1.5px;color:var(--blue)}
+  .mkt nav .links{display:flex;gap:34px;font-size:15px}
+  .mkt nav .right{margin-left:auto;display:flex;gap:22px;align-items:center;font-size:15px}
+  .pill-o{border:1.5px solid var(--blue);color:var(--blue);padding:10px 20px;border-radius:999px}
+  .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:60px;padding:40px 9vw 80px;align-items:center}
+  .eyebrow{color:#0E1A8A;font-size:15px;font-weight:600}
+  .hero h1{font-size:52px;line-height:1.05;letter-spacing:-1.5px;color:#0B1270;margin:14px 0 22px;font-weight:800}
+  .hero h1 em{font-style:normal;color:var(--blue)}
+  .ticks{list-style:none;display:grid;gap:12px;font-size:16px;color:#2B2F40;margin-bottom:28px}
+  .ticks li{display:flex;gap:12px}.ticks li:before{content:"✓";color:#4B5163}
+  .formbox{border:2px solid #6E8BEA;background:#F3F6FF;padding:24px;border-radius:14px;max-width:520px}
+  .row{display:flex;border:1px solid #D2D6E2;border-radius:6px;background:#fff;overflow:hidden}
+  .row input{flex:1;border:0;padding:14px 16px;font-size:16px;outline:none;font-family:inherit}
+  .row select{border:0;border-left:1px solid #D2D6E2;padding:0 14px;font-size:15px;width:140px;background:#fff;font-family:inherit}
+  .btn{background:var(--blue);color:#fff;border-radius:999px;padding:12px 26px;font-weight:600;font-size:15px}
+  .btn:hover{background:var(--blue-d)}
+  .btn.block{width:100%;margin-top:20px;padding:16px}
+  .btn[disabled]{background:#C9CBD3;color:#6C7080;cursor:not-allowed}
+  .hero-img{height:440px;border-radius:24px;background:radial-gradient(circle at 30% 30%,#E9D9C6,transparent 60%),linear-gradient(135deg,#B89B7E,#3B3F66);position:relative;overflow:hidden;box-shadow:0 0 0 6px #EEF0F6}
+  .hero-img .card{position:absolute;right:22px;top:60px;width:200px;background:#fff;border-radius:12px;padding:12px;font-size:10px;box-shadow:0 8px 20px rgba(0,0,0,.15)}
+  .hero-img .badge{position:absolute;left:-10px;background:rgba(40,44,70,.7);color:#fff;padding:12px 22px 12px 40px;border-radius:40px;font-weight:700;font-size:15px}
+  .trust{font-size:13px;color:var(--muted);margin-top:28px}
+
+  /* ---------- App shell: sidebar + header stay fixed, only the panel slides ---------- */
+  .app{display:flex;height:100%}
+  .side{width:250px;flex-shrink:0;background:#fff;padding:36px 30px;display:flex;flex-direction:column}
+  .side .logo{font-size:40px}
+  .steps{margin:auto 0;list-style:none;font-size:15px}
+  .steps li{position:relative;padding-left:28px;color:#8E93A8;height:64px;transition:color .2s}
+  .steps li:before{content:"";position:absolute;left:3px;top:6px;width:8px;height:8px;border-radius:50%;background:#C8CEEA;transition:background .2s}
+  .steps li:not(:last-child):after{content:"";position:absolute;left:6px;top:26px;width:2px;height:30px;background:#DDE2F5;transition:background .2s}
+  .steps li.on{color:var(--ink)} .steps li.on:before{background:var(--blue)}
+  .steps li.done:after{background:var(--blue)}
+  .ref{background:#EEF1FF;color:var(--blue);font-weight:600;padding:10px 18px;border-radius:999px;align-self:flex-start;font-size:15px}
+  .help{margin-top:22px;font-size:13px;line-height:1.6}
+
+  .main{flex:1;background:var(--bg);position:relative;overflow:hidden}
+  .back{position:absolute;left:140px;top:44px;font-size:24px;color:#3B3F52;cursor:pointer;padding:6px;z-index:5}
+  .stage{position:absolute;inset:0}
+  .panel{position:absolute;inset:0;overflow:auto;visibility:hidden;will-change:transform,opacity}
+  .panel.current{visibility:visible;transform:translateX(0);opacity:1}
+  .panel.anim{transition:transform var(--slide-ms) var(--ease),opacity var(--slide-ms) var(--ease);visibility:visible}
+  .panel.from-right{transform:translateX(18%);opacity:0;visibility:visible}
+  .panel.from-left {transform:translateX(-18%);opacity:0;visibility:visible}
+  .panel.to-left  {transform:translateX(-18%);opacity:0}
+  .panel.to-right {transform:translateX(18%);opacity:0}
+  .center{max-width:470px;margin:0 auto;padding:100px 0 90px}
+
+  /* Result panel */
+  .result{display:flex;flex-direction:column;align-items:center;padding-top:180px}
+  .rcard{width:440px;background:#fff;border-radius:18px;box-shadow:0 6px 24px rgba(30,40,90,.06);padding:36px 30px 32px;text-align:center;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .spinner{width:34px;height:34px;border:3px solid #DDE2F5;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .rcard h3{font-weight:500;font-size:18px;margin-top:14px}
+  .namechip{background:#EEF2FF;color:var(--blue);font-size:22px;padding:8px 22px;border-radius:8px;margin:18px 0 10px}
+  .rcard p{font-size:14px;color:#3A3E50}
+  .rcard a{font-size:14px;margin-top:18px;font-weight:500}
+  .result .btn{margin-top:38px}
+
+  /* Upsell panel */
+  /* Green "available" banner — spec from the Figma Make build */
+  .avail{display:none;align-items:center;gap:12px;background:#ECFDF3;border:1px solid #75E0A7;border-radius:16px;padding:16px;margin-bottom:24px}
+  body.mode-morph .avail{display:flex}
+  .avail .tickc{width:40px;height:40px;border-radius:50%;background:#A9EFC5;color:#3746EC;flex-shrink:0;display:block}
+  .avail .tickc svg{display:block}
+  .avail .txt{flex:1;min-width:0;display:flex;flex-direction:column}
+  .avail .txt b{font-size:14px;font-weight:600;line-height:20px;color:#282B3A}
+  .avail .txt span{font-size:14px;font-weight:450;line-height:20px;color:#494D5F;white-space:nowrap}
+  .avail a{font-size:14px;line-height:20px;padding:8px 0;flex-shrink:0}
+
+  /* Result card: loading → done swap in place, with tick pop + draw (as in Figma Make) */
+  @keyframes doneIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.05);opacity:1}100%{transform:scale(1)}}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes floaty{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-4px) rotate(8deg)}}
+  .rcard.done > *{animation:doneIn .5s cubic-bezier(.2,.8,.2,1) .12s both}
+  .rcard .pop{transform-box:fill-box;transform-origin:center;animation:pop .5s cubic-bezier(.2,.8,.2,1) .12s both}
+  .rcard .tick-path{stroke-dasharray:80;stroke-dashoffset:80;animation:draw .45s .42s ease-out forwards}
+  .rcard .float{transform-box:fill-box;transform-origin:center;animation:floaty 3.2s ease-in-out infinite}
+  .rcard .float.d2{animation-delay:-1.4s}
+
+  /* Version C · shared-element flight (mirrors Figma Make's transitionTickToWebsite) */
+  .tick-fly{position:absolute;left:0;top:0;transform-origin:0 0;z-index:70;pointer-events:none;will-change:transform;margin:0}
+  .tick-fly-circle{width:40px;height:40px;border-radius:50%;background:#3746EE;color:#A8EFC6}
+  .tick-fly-circle svg{display:block}
+  .tick-fly-text{white-space:nowrap}
+  .panel.hold{visibility:visible}
+  .panel.tick-enter{visibility:visible}
+  .panel.tick-enter .center{visibility:hidden}
+  @media (prefers-reduced-motion: reduce){ .rcard.done > *, .rcard .pop, .rcard .float{animation:none} .rcard .tick-path{animation:none;stroke-dashoffset:0} }
+  .h2{font-size:24px;font-weight:600;letter-spacing:-.3px;line-height:1.25}
+  .sub{font-size:15px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .tag{background:var(--green);color:#fff;font-size:12px;padding:2px 6px;border-radius:3px;margin-right:6px;font-weight:500}
+  .preview{margin-top:32px;border-radius:16px;overflow:hidden;background:#C9D6FF}
+  .preview .top{padding:10px 16px;font-size:13px;color:#1A2AA0}
+  .browser{background:#F4F5FA;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:9px;color:#666}
+  .browser span.d{width:6px;height:6px;border-radius:50%;background:#C8CAD4;display:inline-block}
+  .browser .url{background:#fff;flex:1;border-radius:4px;padding:2px 8px}
+  .site{height:190px;background:radial-gradient(ellipse at 30% 20%,#3A3C8F 0%,transparent 55%),radial-gradient(ellipse at 80% 70%,#5A2A7A 0%,transparent 55%),#0F1030;color:#fff;position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px}
+  .site .nav{position:absolute;top:12px;left:16px;right:16px;display:flex;font-size:10px}
+  .site .nav b{font-size:11px}.site .nav span{margin-left:auto;opacity:.7}
+  .site h4{font-weight:500;font-size:18px;text-align:center;line-height:1.3}
+  .site .gi{border:1px solid #fff;border-radius:999px;font-size:9px;padding:4px 10px}
+  /* website preview loader */
+  .site > :not(.site-loader){transition:opacity .4s ease, transform .4s ease}
+  .site.loading > :not(.site-loader){opacity:0;transform:translateY(6px)}
+  .site-loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;opacity:0;pointer-events:none;transition:opacity .3s ease}
+  .site.loading .site-loader{opacity:1}
+  .site-spin{width:28px;height:28px;border:3px solid rgba(255,255,255,.22);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+  .site-msg{font-size:12px;color:rgba(255,255,255,.75)}
+  .tiles{display:flex;border:1px solid #BFCBF5;border-radius:14px;margin-top:22px;padding:18px 0}
+  .tiles div{flex:1;text-align:center;font-size:13px;line-height:1.45;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .tiles div+div{border-left:1px solid #BFCBF5}
+  .note{font-size:13px;color:var(--muted);margin-top:28px;line-height:1.5}
+  .actions{display:flex;gap:24px;align-items:center;margin-top:14px}
+  .actions a{font-weight:500;font-size:15px}
+
+  /* Contact panel */
+  label{display:block;font-size:14px;font-weight:500;margin:26px 0 8px}
+  .inp{width:100%;border:1px solid #DADFEE;background:#fff;border-radius:6px;padding:14px 16px;font-size:15px;font-family:inherit;outline:none}
+  .inp:focus{border-color:var(--blue)}
+  .legal{font-size:13px;color:var(--muted);margin-top:40px;line-height:1.5}
+
+  /* Intro */
+  .intro{position:fixed;inset:0;background:rgba(15,18,35,.55);z-index:200;display:flex;align-items:center;justify-content:center}
+  .intro .box{background:#fff;border-radius:16px;padding:32px 34px;max-width:640px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+  .intro h2{font-size:20px;margin-bottom:10px}
+  .intro p{font-size:14px;color:var(--muted);line-height:1.55;margin-bottom:10px}
+  .intro .opts{display:flex;gap:10px;margin-top:20px}
+  .intro .opts button{flex:1;border:1.5px solid var(--line);border-radius:12px;padding:14px;text-align:left;font-size:13px;color:var(--muted)}
+  .intro .opts button b{display:block;color:var(--ink);font-size:14px;margin-bottom:4px}
+  .intro .opts button:hover{border-color:var(--blue)}
+</style>
+</head>
+<body>
+
+<!-- ========== Page 1: Marketing landing ========== -->
+<section class="page active" id="p-landing">
+  <div class="mkt">
+    <nav>
+      <div class="logo">tide</div>
+      <div class="links"><span>Start Your Business</span><span>Business Accounts</span><span>Credit</span><span>Business Tools</span><span>Support</span></div>
+      <div class="right"><span class="pill-o">Open an account</span><span style="color:var(--blue)">Log in to web</span></div>
+    </nav>
+    <div class="hero">
+      <div>
+        <div class="eyebrow">COMPANY REGISTRATION</div>
+        <h1>Register a company for<br>just <em>£14.99</em> <s>£100</s></h1>
+        <ul class="ticks">
+          <li><span><b>Save £85.</b> Pay £14.99 instead of the £100 Companies House fee.</span></li>
+          <li><span><b>Get registered within one business day*.</b> Certificate of Incorporation emailed.</span></li>
+          <li><span><b>Free business bank account &amp; PAYE registration.</b> Everything you need to get up and running.</span></li>
+          <li><span><b>Co-director registration.</b> Get everyone on board from day one, at zero extra cost.</span></li>
+        </ul>
+        <div class="formbox">
+          <div class="row">
+            <input id="nameInput" placeholder="Enter company name" value="Sparrow Global">
+            <select><option>LTD</option><option>LIMITED</option></select>
+          </div>
+          <button class="btn block" id="getStarted">Get started</button>
+        </div>
+        <div class="trust">★★★★★ &nbsp;Excellent · 40,052 reviews on Trustpilot</div>
+      </div>
+      <div class="hero-img">
+        <div class="card"><b>Set up a limited company online</b><br><span style="color:#777">We'll handle the Companies House paperwork</span><br><br>£14.99<br>✓ Apply in minutes<br>✓ Ready within 1 business day<br>✓ Includes a free Tide Current Account</div>
+        <div class="badge" style="top:250px">#1 for UK<br>company formation</div>
+        <div class="badge" style="top:320px">Company &amp; bank<br>account in one</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== Page 2: Sign-up app (one page, panels slide) ========== -->
+<section class="page" id="p-app">
+  <div class="app">
+    <aside class="side">
+      <div class="logo">tide</div>
+      <ul class="steps" id="steps"><li>Company name</li><li>Business Details</li><li>Review</li></ul>
+      <span class="ref">👋 Add referral code</span>
+      <div class="help"><a>FAQs &amp; Help is here</a><br>Weekdays 9am-6pm (UK)</div>
+    </aside>
+    <main class="main">
+      <span class="back" id="backBtn" aria-label="Back">←</span>
+      <div class="stage" id="stage">
+
+        <!-- Panel: name check result -->
+        <div class="panel" id="panel-result" data-step="0">
+          <div class="result">
+            <div class="rcard" id="rcard"><div class="spinner"></div></div>
+            <button class="btn" id="resultNext">Next</button>
+          </div>
+        </div>
+
+        <!-- Panel: website upsell -->
+        <div class="panel" id="panel-upsell" data-step="0">
+          <div class="center" style="padding-top:90px">
+            <div class="avail" id="availBanner">
+              <span class="tickc" id="bTick"><svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M13 20.6l5 4.9 9.2-9.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <div class="txt"><b class="cname" id="bName">Sparrow Global</b><span id="bSub">is available to register</span></div>
+              <a id="bannerSearchAgain">Search again</a>
+            </div>
+            <div class="h2">Get a website for <span class="cname">Sparrow Global</span></div>
+            <div class="sub"><span class="tag">1st Month Free</span>Then <b style="color:var(--ink);font-weight:500">£17.99</b>/month. Cancel anytime.</div>
+            <div class="preview">
+              <div class="top">👁 Preview: Here’s how your website could look.</div>
+              <div class="browser"><span class="d"></span><span class="d"></span><span class="d"></span><span class="url">www.<span class="cslug">sparrowglobal</span>.co.uk</span></div>
+              <div class="site" id="site">
+                <div class="site-loader" aria-hidden="true"><span class="site-spin"></span><span class="site-msg">Building your preview…</span></div>
+                <div class="nav"><b class="cname">Sparrow Global</b><span>Services · About us · Contact ☰</span></div>
+                <h4><span class="cname">Sparrow Global</span>’s website<br>can look like this</h4>
+                <span class="gi">Get in touch</span>
+              </div>
+            </div>
+            <div class="tiles">
+              <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B2BD6" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Built by AI<br>in minutes</div>
+              <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B2BD6" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>Your own<br>web address</div>
+              <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B2BD6" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>3 custom<br>email addresses</div>
+            </div>
+            <div class="note">No payment or commitment now. We’ll charge you later, at the same time as your company registration fee.</div>
+            <div class="actions"><button class="btn" data-panel="contact">I’m interested in a website</button><a data-panel="contact">Not now</a></div>
+          </div>
+        </div>
+
+        <!-- Panel: contact details -->
+        <div class="panel" id="panel-contact" data-step="1">
+          <div class="center">
+            <div class="h2">Enter the email and mobile number that is associated with <span style="font-weight:400" class="cname">Sparrow Global</span></div>
+            <div class="sub">Your company certificate will be emailed to you when your company is incorporated.</div>
+            <label>Email address</label><input class="inp">
+            <label>Mobile phone number</label><input class="inp" value="+44(0)">
+            <div class="legal">You can learn how we treat your personal data by reading our <a>Privacy Notice</a></div>
+            <button class="btn" disabled style="margin-top:40px">Next</button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ========== Intro ========== -->
+<div class="intro" id="intro">
+  <div class="box">
+    <h2>ONBP desktop: click to continue vs. auto + morph</h2>
+    <p>Type a company name and click <b>Get started</b>. Then watch what happens after the “Congratulations” card. Try it the way people use a desktop: read the card, think about the name, or glance at another tab.</p>
+    <p>You can switch versions and restart at any time from the bar at the bottom.</p>
+    <div class="opts">
+      <button data-mode="click"><b>B · Click to continue</b>Stays on the result until the user clicks Next.</button>
+      <button data-mode="morph"><b>C · Auto + morph</b>Auto after 1.8s; the tick and name fly into the green banner (as in Figma Make).</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== Control bar ========== -->
+<div class="ctrl">
+  <span class="dot"></span><span class="lbl">Version</span>
+  <div class="seg"><button data-mode="click" id="mClick">B · Click to continue</button><button data-mode="morph" id="mMorph">C · Auto + morph</button></div>
+  <button class="restart" id="restart">↺ Restart</button>
+</div>
+<div class="log" id="log"></div>
+
+<script>
+  const AUTO_DELAY = 1500;      // same as mobile
+  const SLIDE_MS   = 280;       // matches the recording
+  const ORDER = ['result','upsell','contact'];
+  const BACK  = { result:'landing', upsell:'result', contact:'upsell' };
+
+  let mode = 'click', timers = [], resultShownAt = 0, name = 'Sparrow Global', current = null, animating = false;
+
+  const $ = s => document.querySelector(s);
+  const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  function log(msg, warn){
+    const el = document.createElement('div'); el.textContent = msg; if (warn) el.className = 'warn';
+    $('#log').appendChild(el); requestAnimationFrame(()=>el.classList.add('show'));
+    setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),300); }, 3800);
+  }
+
+  function setMode(m){
+    mode = m;
+    document.body.classList.toggle('mode-morph', m==='morph');
+    $('#mClick').classList.toggle('on', m==='click');
+    $('#mMorph').classList.toggle('on', m==='morph');
+  }
+  const MODE_NAME = { click:'B · Click to continue', morph:'C · Auto + morph' };
+
+  /* ---- Version C: direct port of Figma Make's transitionTickToWebsite() ---- */
+  const OFFER_HOLD_MS = 1800;                       // Figma Make: hold on "available" before the flight
+  const FLY_MS = 620, EASE = 'cubic-bezier(.65,0,.25,1)';
+
+  function resetMorph(){
+    document.querySelectorAll('.tick-fly').forEach(e=>e.remove());
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('hold','tick-enter'));
+    const c = $('#rcard'); if (c) c.style.visibility = '';
+  }
+
+  function morphToUpsell(){
+    const resultP = $('#panel-result'), upsellP = $('#panel-upsell'), host = $('#p-app .main');
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !Element.prototype.animate) { slideTo('upsell', { instant:true }); return; }
+
+    const hostRect = host.getBoundingClientRect();
+    const relativeRect = r => ({ x:r.left-hostRect.left, y:r.top-hostRect.top, w:r.width, h:r.height });
+    const textRect = el => { const rg = document.createRange(); rg.selectNodeContents(el); return relativeRect(rg.getBoundingClientRect()); };
+
+    // FROM: the result card
+    const sourcePanel = $('#rcard'), sourceName = $('#cName'), sourceSub = $('#cSub');
+    const from = {
+      circle: relativeRect($('#cTick circle').getBoundingClientRect()),
+      name:   textRect(sourceName),
+      sub:    textRect(sourceSub)
+    };
+
+    // Switch to the upsell without a slide: result stays visible underneath ("hold"),
+    // upsell is on top but its content is hidden ("tick-enter") until the travellers land.
+    upsellP.classList.add('tick-enter');
+    slideTo('upsell', { instant:true });
+    upsellP.classList.add('tick-enter');
+    resultP.classList.add('hold');
+    resultP.style.zIndex = '1'; upsellP.style.zIndex = '2';
+    void upsellP.offsetWidth;
+
+    // TO: the green banner
+    const to = {
+      circle: relativeRect($('#bTick').getBoundingClientRect()),
+      name:   textRect($('#bName')),
+      sub:    textRect($('#bSub'))
+    };
+
+    const textClone = src => {
+      const clone = document.createElement('p'), cs = getComputedStyle(src);
+      clone.className = 'tick-fly tick-fly-text';
+      clone.textContent = src.textContent;
+      clone.style.font = cs.fontWeight + ' ' + cs.fontSize + '/' + cs.lineHeight + ' ' + cs.fontFamily;
+      clone.style.color = cs.color;
+      return clone;
+    };
+    const circle = document.createElement('div');
+    circle.className = 'tick-fly tick-fly-circle';
+    circle.innerHTML = '<svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M13 20.6l5 4.9 9.2-9.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const nameTraveller = textClone(sourceName), subTraveller = textClone(sourceSub);
+    subTraveller.textContent = 'is available to register';
+    [circle, nameTraveller, subTraveller].forEach(e=>host.appendChild(e));
+    sourcePanel.style.visibility = 'hidden';
+
+    const nameScale = to.name.h / from.name.h;
+    circle.animate([
+      { transform:`translate(${from.circle.x}px,${from.circle.y}px) scale(${from.circle.w/40})`, background:'#3746EE', color:'#A8EFC6' },
+      { transform:`translate(${to.circle.x}px,${to.circle.y}px) scale(1)`,                      background:'#A9EFC5', color:'#3746EC' }
+    ], { duration:FLY_MS, easing:EASE, fill:'forwards' });
+
+    const nameOffset = textRect(nameTraveller);
+    nameTraveller.animate([
+      { transform:`translate(${from.name.x-nameOffset.x}px,${from.name.y-nameOffset.y}px) scale(1)`, color:getComputedStyle(sourceName).color },
+      { transform:`translate(${to.name.x-nameOffset.x*nameScale}px,${to.name.y-nameOffset.y*nameScale}px) scale(${nameScale})`, color:'#282B3A' }
+    ], { duration:FLY_MS, easing:EASE, fill:'forwards' });
+
+    const subOffset = textRect(subTraveller);
+    subTraveller.animate([
+      { transform:`translate(${from.sub.x-subOffset.x}px,${from.sub.y-subOffset.y}px)` },
+      { transform:`translate(${to.sub.x-subOffset.x}px,${to.sub.y-subOffset.y}px)` }
+    ], { duration:FLY_MS, delay:30, easing:EASE, fill:'both' });
+
+    later(()=>{
+      upsellP.classList.remove('tick-enter');
+      [circle, nameTraveller, subTraveller].forEach(e=>e.remove());
+      sourcePanel.style.visibility = '';
+      resultP.classList.remove('hold');
+      resultP.style.zIndex = ''; upsellP.style.zIndex = '';
+    }, FLY_MS + 40);
+  }
+
+  /* ---- Full page change (landing <-> app) ---- */
+  function applyName(){
+    document.querySelectorAll('.cname').forEach(e=>e.textContent = name);
+    document.querySelectorAll('.cslug').forEach(e=>e.textContent = name.toLowerCase().replace(/[^a-z0-9]/g,''));
+  }
+
+  function updateSteps(step){
+    [...$('#steps').children].forEach((li,i)=>{
+      li.classList.toggle('on', i <= step);
+      li.classList.toggle('done', i < step);
+    });
+  }
+
+  /* ---- Full page change (landing <-> app) ---- */
+  function showPage(id){
+    clearTimers(); resetMorph();
+    document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'p-'+id));
+  }
+
+  /* ---- In-page panel slide: forward = slide left, back = slide right ---- */
+  function slideTo(id, opts = {}){
+    if (id === 'landing'){ showPage('landing'); current = null; return; }
+    const next = $('#panel-'+id);
+    const prev = current ? $('#panel-'+current) : null;
+    if (prev === next) return;
+
+    clearTimers();
+    const keepHold = next.classList.contains('tick-enter');
+    if (!keepHold) resetMorph();
+    updateSteps(+next.dataset.step);
+    if (id === 'result') runNameCheck();
+    if (id === 'upsell' && current === 'result') loadPreview();   // first arrival only, not when coming back
+
+    if (!prev || opts.instant){
+      document.querySelectorAll('.panel').forEach(p=>p.className='panel');
+      next.classList.add('current'); if (keepHold) next.classList.add('tick-enter');
+      next.scrollTop = 0; current = id; return;
+    }
+
+    const forward = ORDER.indexOf(id) > ORDER.indexOf(current);
+    animating = true;
+    next.scrollTop = 0;
+    next.className = 'panel ' + (forward ? 'from-right' : 'from-left');
+    void next.offsetWidth;                         // lock start position
+    next.classList.add('anim'); prev.classList.add('anim');
+    requestAnimationFrame(()=>{
+      next.classList.remove('from-right','from-left'); next.classList.add('current');
+      prev.classList.remove('current'); prev.classList.add(forward ? 'to-left' : 'to-right');
+    });
+    setTimeout(()=>{
+      document.querySelectorAll('.panel').forEach(p=>{ p.className = (p.id === 'panel-'+current) ? 'panel current' : 'panel'; });
+      animating = false;
+    }, SLIDE_MS + 20);
+    current = id;
+  }
+
+  /* ---- Name check: spinner swaps to result IN PLACE (no slide) ---- */
+  const PREVIEW_MS = 1400;
+  function loadPreview(){
+    const site = $('#site');
+    site.classList.add('loading');
+    previewTimer && clearTimeout(previewTimer);
+    previewTimer = setTimeout(()=>site.classList.remove('loading'), PREVIEW_MS);
+  }
+  let previewTimer = null;
+
+  function runNameCheck(){
+    const card = $('#rcard'), nextBtn = $('#resultNext');
+    card.classList.remove('done');
+    card.innerHTML = '<div class="spinner"></div>';
+    nextBtn.classList.add('hidden');
+    later(()=>{
+      card.classList.add('done');
+      card.innerHTML = `
+        <svg width="240" height="96" viewBox="72 7 240 140" style="overflow:visible">
+          <path class="float" d="M86.5 7 101 21.5 86.5 36 72 21.5Z" fill="#A5C0FF"/>
+          <rect x="91" y="137" width="169" height="10" fill="#12127E"/>
+          <circle cx="90" cy="119" r="28" fill="#D9BBFD"/>
+          <g class="pop" id="cTick">
+            <circle cx="184" cy="87" r="60" fill="#3746EE"/>
+            <path class="tick-path" d="M157 85 176 106 211 72" fill="none" stroke="#A8EFC6" stroke-width="9" stroke-linejoin="miter"/>
+          </g>
+          <rect x="260" y="101" width="52" height="46" fill="#00A3AE"/>
+          <path class="float d2" d="M291 55 305 69 291 83 277 69Z" fill="#A8EFC6"/>
+        </svg>
+        <h3>Congratulations 🎉</h3>
+        <div class="namechip" id="cName">${name}</div>
+        <p id="cSub">is available to register.</p>`;
+      resultShownAt = performance.now();
+
+      if (mode === 'click') {
+        nextBtn.classList.remove('hidden');
+      } else {
+        later(()=>{
+          const secs = ((performance.now()-resultShownAt)/1000).toFixed(1);
+          if (document.hidden) log(`Moved on while you were on another tab (${secs}s)`, true);
+          else log(`Moved on by itself after ${secs}s, nothing clicked`, true);
+          if (mode === 'morph') { try { morphToUpsell(); } catch (err) { console.error(err); resetMorph(); slideTo('upsell'); } }
+          else slideTo('upsell');
+        }, mode === 'morph' ? OFFER_HOLD_MS : AUTO_DELAY);
+      }
+    }, 1300);
+  }
+
+  /* ---- Wiring ---- */
+  $('#bannerSearchAgain').onclick = () => { log('“Search again” clicked from banner'); slideTo('landing'); $('#nameInput').focus(); $('#nameInput').select(); };
+  $('#resultNext').onclick = () => {
+    const secs = ((performance.now()-resultShownAt)/1000).toFixed(1);
+    log(`You clicked Next after ${secs}s on the result`);
+    slideTo('upsell');
+  };
+  $('#backBtn').onclick = () => {
+    if (!current) return;
+    // In C the result screen is transient, so Back from the upsell returns to name entry (otherwise it would bounce forward again)
+    if (mode === 'morph' && current === 'upsell') { log('Back skips the transient result and goes to name entry'); slideTo('landing'); return; }
+    slideTo(BACK[current]);
+  };
+
+  $('#getStarted').onclick = () => {
+    name = $('#nameInput').value.trim() || 'Sparrow Global';
+    applyName();
+    showPage('app');
+    current = null;
+    slideTo('result', { instant:true });
+  };
+  $('#nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#getStarted').click(); });
+
+  document.addEventListener('click', e => {
+    const p = e.target.closest('[data-panel]'); if (p) slideTo(p.dataset.panel);
+    const m = e.target.closest('[data-mode]');
+    if (m){
+      setMode(m.dataset.mode); $('#intro').classList.add('hidden');
+      if (m.closest('.seg')) { log('Switched to ' + MODE_NAME[mode]); slideTo('landing'); }
+    }
+  });
+  $('#restart').onclick = () => { slideTo('landing'); log('Restarted'); };
+
+  setMode('click'); applyName();
+</script>
+</body>
+</html>
